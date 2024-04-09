@@ -89,7 +89,6 @@ void print_dlist(struct dirlist dirlist) {
 struct dirlist iterate_dir(char* path) {
   struct dirlist dirlist = {0};
   if(!does_path_exist(path)) {
-    debug_print("%s does not exist\n", path);
     return dirlist;
   }
   if(!is_path_dir(path)) {
@@ -252,15 +251,32 @@ int remove_dir_recursively(char* path) {
     printf("%s does not exist\n", path);
     return 0;
   }
+  struct dirent* dirent;
   unsigned plen = strlen(path);
-  char* buff = (char*)calloc(1, strlen(path));
-  printf("path=%s\n", path);
-  struct dirlist dirlist = {0};
+  char buff[PATH_MAX];
+  if(plen > 2 && path[0] == '.' && path[1] == '.') {
+    path += 2;
+    plen -= 2;
+  }
   for(int i = 0; i < plen; i++) {
-    buff[i] = path[i];
-    if(is_path_dir(buff)) {
-      remove_dir_recursively(buff);
+    if(path[i] == '/') {
+      DIR* dir = opendir(path);
+      while((dirent = readdir(dir)) != NULL) {
+        if(strlen(dirent->d_name) <= 2 && dirent->d_name[0] == '.' || dirent->d_name[1] == '.') {
+          continue;
+        }
+        snprintf(buff, PATH_MAX, "%s/%s", path, dirent->d_name);
+        if(is_path_dir(buff)) {
+          printf("HERE\n");
+          remove_dir_recursively(buff);
+        }
+        unlink(buff);
+      }
     }
+  }
+  if(rmdir(path) < 0) {
+    print_errno();
+    return 0;
   }
 
   return 1;
