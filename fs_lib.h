@@ -267,7 +267,6 @@ int remove_dir_recursively(char* path) {
         }
         snprintf(buff, PATH_MAX, "%s/%s", path, dirent->d_name);
         if(is_path_dir(buff)) {
-          printf("HERE\n");
           remove_dir_recursively(buff);
         }
         unlink(buff);
