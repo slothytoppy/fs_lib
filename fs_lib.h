@@ -11,11 +11,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-void print_errno(void) {
-  printf("%s\n", strerror(errno));
-  return;
-}
-
 void debug_print(char* fmt, ...) {
 #ifdef DEBUG
   printf("[DEBUG] ");
@@ -26,6 +21,14 @@ void debug_print(char* fmt, ...) {
 #endif
   return;
 }
+
+void print_errno(void) {
+  debug_print("%s\n", strerror(errno));
+  return;
+}
+
+#define print_fn_entry debug_print("entered %s\n", __FUNCTION__)
+#define print_fn_leave debug_print("leaving %s\n", __FUNCTION__)
 
 int does_path_exist(char* path) {
   struct stat fi;
@@ -41,6 +44,7 @@ int does_path_exist(char* path) {
 int is_path_dir(char* path) {
   if(!does_path_exist(path)) {
     debug_print("%s does not exist\n", path);
+    return 0;
   }
   struct stat fi;
   if(stat(path, &fi) < 0) {
@@ -51,6 +55,13 @@ int is_path_dir(char* path) {
     return 1;
   }
   return 0;
+}
+
+int is_path_file(char* path) {
+  if(!does_path_exist(path)) {
+    debug_print("%s does not exist\n", path);
+    return 0;
+  }
 }
 
 struct dirlist {
@@ -116,7 +127,7 @@ int create_file(char* path) {
       print_errno();
       return 0;
     }
-    debug_print("created %s\n", path);
+    debug_print("created file %s\n", path);
     return 1;
   }
   debug_print("%s already exists\n", path);
@@ -142,7 +153,7 @@ int create_dir(char* path) {
       print_errno();
       return 0;
     }
-    debug_print("created %s\n", path);
+    debug_print("created dir %s\n", path);
     return 1;
   }
   debug_print("%s already exists\n", path);
@@ -201,36 +212,8 @@ int create_file_recursively(char* path) {
     return 1;
   }
   int file_len = strlen(path);
-  char* file = (char*)calloc(1, file_len);
   int i = 0;
-  if(path[0] == '.' && path[1] == '/') {
-    i = 2;
-  }
-  for(; i <= file_len; i++) {
-    file[i] = path[i];
-    if(file[i] == '/') {
-      printf("%d %c\n", i, file[i]);
-      if(does_path_exist(file)) {
-        continue;
-      }
-      create_dir(file);
-    }
-    printf("file=%s\n", file);
-  }
-  create_file(file);
-  return 1;
-}
-
-int create_dir_recursively(char* path) {
-  if(does_path_exist(path)) {
-    return 1;
-  }
-  int file_len = strlen(path);
   char* file = (char*)calloc(1, file_len);
-  int i = 0;
-  if(path[0] == '.' && path[1] == '/') {
-    i = 2;
-  }
   for(; i <= file_len; i++) {
     file[i] = path[i];
     if(file[i] == '/') {
@@ -240,24 +223,46 @@ int create_dir_recursively(char* path) {
       }
       create_dir(file);
     }
-    // debug_print("file=%s\n", file);
+    debug_print("file=%s\n", file);
   }
-  create_dir(file);
+  create_file(file);
   return 1;
 }
 
-int remove_dir_recursively(char* path) {
-  if(!does_path_exist(path)) {
+int create_dir_recursively(const char* const path) {
+  print_fn_entry;
+  if(does_path_exist((char*)path)) {
+    return 1;
+  }
+  int file_len = strlen(path);
+  int i = 0;
+  char* p_copy = (char*)path;
+  char* file = (char*)calloc(1, file_len);
+  for(; i < file_len; i++) {
+    file[i] = p_copy[i];
+    if(file[i] == '/') {
+      debug_print("%d %c\n", i, file[i]);
+      if(does_path_exist(file)) {
+        continue;
+      }
+      create_dir(file);
+    }
+    debug_print("file=%s\n", file);
+  }
+  create_dir(file);
+  print_fn_leave;
+  return 1;
+}
+
+int remove_dir_recursively(const char* const path) {
+  print_fn_entry;
+  if(!does_path_exist((char*)path)) {
     printf("%s does not exist\n", path);
     return 0;
   }
   struct dirent* dirent;
   unsigned plen = strlen(path);
   char buff[PATH_MAX];
-  if(plen > 2 && path[0] == '.' && path[1] == '.') {
-    path += 2;
-    plen -= 2;
-  }
   for(int i = 0; i < plen; i++) {
     if(path[i] == '/') {
       DIR* dir = opendir(path);
@@ -267,9 +272,11 @@ int remove_dir_recursively(char* path) {
         }
         snprintf(buff, PATH_MAX, "%s/%s", path, dirent->d_name);
         if(is_path_dir(buff)) {
+          debug_print("%d %c\n", i, buff[i]);
           remove_dir_recursively(buff);
         }
         unlink(buff);
+        print_errno();
       }
     }
   }
@@ -277,6 +284,7 @@ int remove_dir_recursively(char* path) {
     print_errno();
     return 0;
   }
-
+  printf("deleted=%s\n", path);
+  print_fn_leave;
   return 1;
 }
