@@ -61,12 +61,13 @@ struct dirlist {
 
 int dlist_append(struct dirlist* dirlist, char* item) {
   if(dirlist->count == 0) {
-    dirlist->capacity = 256;
+    dirlist->dir = (char**)calloc(1, 8 * sizeof(char*));
+    dirlist->capacity = 8;
   } else {
-    dirlist->dir = (char**)realloc(dirlist->dir, (dirlist->count + 1) * sizeof(dirlist->dir));
+    dirlist->dir = (char**)realloc(dirlist->dir, (dirlist->count + 3) * sizeof(void*));
     if(dirlist->count >= dirlist->capacity) {
       dirlist->capacity *= 2;
-      dirlist->dir = (char**)realloc(dirlist->dir, dirlist->capacity * sizeof(dirlist->dir));
+      dirlist->dir = (char**)realloc(dirlist->dir, dirlist->capacity * sizeof(void*));
     }
   }
   if(dirlist->dir == NULL) {
@@ -76,6 +77,13 @@ int dlist_append(struct dirlist* dirlist, char* item) {
   dirlist->count += 1;
   dirlist->dir[dirlist->count] = NULL;
   return 1;
+}
+
+void print_dlist(struct dirlist dirlist) {
+  for(int i = 0; i < dirlist.count; i++) {
+    printf("%s ", dirlist.dir[i]);
+  }
+  printf("\n");
 }
 
 struct dirlist iterate_dir(char* path) {
@@ -91,17 +99,14 @@ struct dirlist iterate_dir(char* path) {
   DIR* dir = opendir(path);
   struct dirent* dirent;
   int path_len = strlen(path);
-  char** path_list = (char**)calloc(1, path_len * sizeof(char*));
   for(int i = 0; (dirent = readdir(dir)) != NULL; i++) {
     if(strlen(dirent->d_name) <= 2 && dirent->d_name[0] == '.' || dirent->d_name[1] == '.') {
+      i -= 1;
       continue;
     }
-    if(strlen(dirent->d_name) > strlen(path)) {
-      path_len += strlen(dirent->d_name);
-      path_list = (char**)realloc(path_list, path_len * sizeof(char*));
+    if(!dlist_append(&dirlist, path)) {
+      return dirlist;
     }
-    path_list[i] = dirent->d_name;
-    printf("path_list[%d]=%s\n", i, path_list[i]);
   }
   return dirlist;
 }
@@ -244,19 +249,19 @@ int create_dir_recursively(char* path) {
 
 int remove_dir_recursively(char* path) {
   if(!does_path_exist(path)) {
-    printf("%s does not exist\n");
+    printf("%s does not exist\n", path);
     return 0;
   }
   unsigned plen = strlen(path);
-  char* buff = (char*)calloc(1, plen);
+  char* buff = (char*)calloc(1, strlen(path));
+  printf("path=%s\n", path);
+  struct dirlist dirlist = {0};
   for(int i = 0; i < plen; i++) {
     buff[i] = path[i];
-    if(path[i] == '/') {
-      struct dirlist dirlist = iterate_dir(buff);
-      for(int i = 0; i < dirlist.count; i++) {
-        printf("dirlist.dir[%d]=%s\n", i, dirlist.dir);
-      }
+    if(is_path_dir(buff)) {
+      remove_dir_recursively(buff);
     }
   }
+
   return 1;
 }
