@@ -11,6 +11,26 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/*
+void debug_print(char* fmt, ...);
+void print_errno(void);
+int does_path_exist(char* path);
+int is_path_dir(char* path);
+int is_path_file(char* path);
+int dlist_append(struct dirlist* dirlist, char* item);
+void print_dlist(struct dirlist dirlist);
+struct dirlist iterate_dir(char* path);
+int create_file(char* path);
+int delete_file(char* path);
+int create_dir(char* path);
+int remove_dir(char* path);
+void* load_file_from_path(char* path);
+int unload_file_from_memory(char* mem, unsigned size);
+int create_file_recursively(char* path);
+int create_dir_recursively(const char* const path);
+int remove_dir_recursively(const char* const path);
+*/
+
 void debug_print(char* fmt, ...) {
 #ifdef DEBUG
   printf("[DEBUG] ");
@@ -111,10 +131,9 @@ struct dirlist iterate_dir(char* path) {
   int path_len = strlen(path);
   for(int i = 0; (dirent = readdir(dir)) != NULL; i++) {
     if(strlen(dirent->d_name) <= 2 && dirent->d_name[0] == '.' || dirent->d_name[1] == '.') {
-      i -= 1;
       continue;
     }
-    if(!dlist_append(&dirlist, path)) {
+    if(!dlist_append(&dirlist, dirent->d_name)) {
       return dirlist;
     }
   }
