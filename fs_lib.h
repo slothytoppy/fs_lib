@@ -82,6 +82,15 @@ int is_path_file(char* path) {
     debug_print("%s does not exist\n", path);
     return 0;
   }
+  struct stat fi;
+  if(stat(path, &fi) < 0) {
+    debug_print("%s\n", strerror(errno));
+    return 0;
+  }
+  if(S_ISREG(fi.st_mode)) {
+    return 1;
+  }
+  return 0;
 }
 
 struct dirlist {
@@ -112,32 +121,37 @@ int dlist_append(struct dirlist* dirlist, char* item) {
 
 void print_dlist(struct dirlist dirlist) {
   for(int i = 0; i < dirlist.count; i++) {
-    printf("%s ", dirlist.dir[i]);
+    printf("%s\n", dirlist.dir[i]);
   }
-  printf("\n");
+  printf("dirlist.count=%d\n", dirlist.count);
 }
 
-struct dirlist iterate_dir(char* path) {
-  struct dirlist dirlist = {0};
+struct dirlist iterate_dir(struct dirlist* dirlist, char* path) {
+  struct dirlist null_list = {0};
   if(!does_path_exist(path)) {
-    return dirlist;
+    return null_list;
   }
   if(!is_path_dir(path)) {
     debug_print("%s is not a directory\n", path);
-    return dirlist;
+    return null_list;
   }
   DIR* dir = opendir(path);
   struct dirent* dirent;
   int path_len = strlen(path);
+  char* file;
   for(int i = 0; (dirent = readdir(dir)) != NULL; i++) {
     if(strlen(dirent->d_name) <= 2 && dirent->d_name[0] == '.' || dirent->d_name[1] == '.') {
       continue;
     }
-    if(!dlist_append(&dirlist, dirent->d_name)) {
-      return dirlist;
+    int max_len = strlen(dirent->d_name) + path_len;
+    file = (char*)calloc(1, PATH_MAX);
+    snprintf(file, PATH_MAX, "%s/%s", path, dirent->d_name);
+    if(is_path_dir(file)) {
+      iterate_dir(dirlist, file);
     }
+    dlist_append(dirlist, file);
   }
-  return dirlist;
+  return null_list;
 }
 
 int create_file(char* path) {
@@ -153,19 +167,6 @@ int create_file(char* path) {
   return 0;
 }
 
-int delete_file(char* path) {
-  if(does_path_exist(path)) {
-    if(unlink(path) < 0) {
-      print_errno();
-      return 0;
-    }
-    debug_print("deleted %s\n", path);
-    return 1;
-  }
-  debug_print("%s does not exist\n", path);
-  return 0;
-}
-
 int create_dir(char* path) {
   if(!does_path_exist(path)) {
     if(mkdir(path, 0755) < 0) {
@@ -176,6 +177,19 @@ int create_dir(char* path) {
     return 1;
   }
   debug_print("%s already exists\n", path);
+  return 0;
+}
+
+int remove_file(char* path) {
+  if(does_path_exist(path)) {
+    if(unlink(path) < 0) {
+      print_errno();
+      return 0;
+    }
+    debug_print("deleted %s\n", path);
+    return 1;
+  }
+  debug_print("%s does not exist\n", path);
   return 0;
 }
 
@@ -193,11 +207,7 @@ int remove_dir(char* path) {
   return 0;
 }
 
-void* load_file_from_path(char* path) {
-  if(!does_path_exist(path)) {
-    debug_print("%s does not exist\n", path);
-    return 0;
-  }
+__attribute__((warn_unused_result)) void* load_file_from_path(char* path, int prot, int flags) {
   struct stat fi;
   if(stat(path, &fi) < 0) {
     print_errno();
@@ -208,8 +218,7 @@ void* load_file_from_path(char* path) {
     print_errno();
     return 0;
   }
-  void* file_mem;
-  file_mem = mmap(0, fi.st_size, PROT_READ, MAP_PRIVATE, fd_path, 0);
+  void* file_mem = mmap(0, fi.st_size, prot, flags, fd_path, 0);
   if(file_mem == MAP_FAILED) {
     print_errno();
     return NULL;
@@ -236,13 +245,11 @@ int create_file_recursively(char* path) {
   for(; i <= file_len; i++) {
     file[i] = path[i];
     if(file[i] == '/') {
-      debug_print("%d %c\n", i, file[i]);
       if(does_path_exist(file)) {
         continue;
       }
       create_dir(file);
     }
-    debug_print("file=%s\n", file);
   }
   create_file(file);
   return 1;
@@ -255,18 +262,15 @@ int create_dir_recursively(const char* const path) {
   }
   int file_len = strlen(path);
   int i = 0;
-  char* p_copy = (char*)path;
   char* file = (char*)calloc(1, file_len);
   for(; i < file_len; i++) {
-    file[i] = p_copy[i];
+    file[i] = path[i];
     if(file[i] == '/') {
-      debug_print("%d %c\n", i, file[i]);
       if(does_path_exist(file)) {
         continue;
       }
       create_dir(file);
     }
-    debug_print("file=%s\n", file);
   }
   create_dir(file);
   print_fn_leave;
@@ -291,7 +295,6 @@ int remove_dir_recursively(const char* const path) {
         }
         snprintf(buff, PATH_MAX, "%s/%s", path, dirent->d_name);
         if(is_path_dir(buff)) {
-          debug_print("%d %c\n", i, buff[i]);
           remove_dir_recursively(buff);
         }
         unlink(buff);
@@ -303,7 +306,6 @@ int remove_dir_recursively(const char* const path) {
     print_errno();
     return 0;
   }
-  printf("deleted=%s\n", path);
   print_fn_leave;
   return 1;
 }
